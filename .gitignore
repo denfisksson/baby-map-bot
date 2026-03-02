@@ -39,3 +39,7 @@ wheels/
 
 # Logs
 *.log
+
+# Claude Code
+.claude/
+CLAUDE.md

@@ -21,10 +21,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a welcome message when the command /start is issued."""
     welcome_message = (
         "👋 Welcome to Baby-Friendly Spots Bot!\n\n"
-        "I help you find kid-friendly locations like cafes, parks, playgrounds, "
+        "I help you find baby-friendly locations like cafes, parks, playgrounds, "
         "and more for babies.\n\n"
-        "📍 Just send me a location name (e.g., 'Barcelona', 'Times Square', 'Central Park') "
-        "and I'll show you nearby kid-friendly spots!\n\n"
+        "📍 Just send me a location name (e.g., 'Prague', 'Old Town Square, Prague', 'St. Vitus Cathedral') "
+        "and I'll show you nearby baby-friendly spots!\n\n"
         "Use /help to see all available commands."
     )
     await update.message.reply_text(welcome_message)
@@ -34,14 +34,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send help information when the command /help is issued."""
     help_message = (
         "🤖 *How to use this bot:*\n\n"
-        "Simply send me a location name, and I'll find kid-friendly spots nearby!\n\n"
+        "Simply send me a location name, and I'll find baby-friendly spots nearby!\n\n"
         "*Commands:*\n"
         "/start - Start the bot and see welcome message\n"
         "/help - Show this help message\n\n"
         "*Examples:*\n"
-        "• Barcelona\n"
-        "• Central Park, New York\n"
-        "• Eiffel Tower\n\n"
+        "• Prague\n"
+        "• Old Town Square, Prague\n"
+        "• St. Vitus Cathedral\n\n"
         "📍 You can also share your GPS location for more accurate results (coming soon)!"
     )
     await update.message.reply_text(help_message, parse_mode='Markdown')
@@ -54,7 +54,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Send "searching" message
     searching_msg = await update.message.reply_text(
-        f"🔍 Searching for kid-friendly spots near '{user_message}'..."
+        f"🔍 Searching for baby-friendly spots near '{user_message}'..."
     )
 
     # Step 1: Geocode the location
@@ -63,7 +63,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await searching_msg.edit_text(
             f"❌ Sorry, I couldn't find the location '{user_message}'.\n\n"
             "Please try:\n"
-            "• Being more specific (e.g., 'Central Park, New York')\n"
+            "• Being more specific (e.g., 'Prague, Czech Republic')\n"
             "• Using a different name\n"
             "• Checking for typos"
         )
@@ -79,13 +79,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not venues:
         await searching_msg.edit_text(
-            f"😔 No kid-friendly spots found near {location_data['display_name']}.\n\n"
+            f"😔 No baby-friendly spots found near {location_data['display_name']}.\n\n"
             "Try searching for a different location or a larger city nearby."
         )
         return
 
     # Step 3: Format and send results
-    response = f"📍 *Kid-friendly spots near {user_message}*\n"
+    response = f"📍 *Baby-friendly spots near {user_message}*\n"
     response += f"_{location_data['display_name']}_\n\n"
 
     for i, venue in enumerate(venues, 1):
