@@ -1,6 +1,7 @@
 import requests
 import logging
-from typing import List, Dict
+import re
+from typing import List, Dict, Optional
 from math import radians, cos, sin, asin, sqrt
 
 logger = logging.getLogger(__name__)
@@ -24,10 +25,20 @@ class LocationSearchService:
         'water_park': {'leisure': 'water_park'},
     }
 
+    # Negative patterns that indicate non-kid-friendly context
+    NEGATIVE_PATTERNS = [
+        r'\bno\s+',           # "no baby chairs"
+        r'\bnot\s+',          # "not for kids"
+        r'\bwithout\s+',      # "without children's menu"
+        r"doesn't\s+",        # "doesn't have kids area"
+        r"don't\s+",          # "don't bring babies"
+        r'\badults?\s+only',  # "adults only"
+    ]
+
     def __init__(self):
         self.session = requests.Session()
 
-    def search_nearby_venues(self, lat: float, lon: float, radius_km: float = 2.0, max_results: int = 15) -> List[Dict]:
+    def search_nearby_venues(self, lat: float, lon: float, radius_km: float = 2.0, max_results: int = 15, category: Optional[str] = None) -> List[Dict]:
         """
         Search for kid-friendly venues near a location.
 
@@ -36,6 +47,7 @@ class LocationSearchService:
             lon: Longitude
             radius_km: Search radius in kilometers
             max_results: Maximum number of results to return
+            category: Optional category filter (cafes, parks, museums, indoor, all)
 
         Returns:
             List of venue dictionaries
@@ -55,6 +67,10 @@ class LocationSearchService:
 
             data = response.json()
             venues = self._parse_overpass_response(data, lat, lon)
+
+            # Filter by category if specified
+            if category:
+                venues = [v for v in venues if self._matches_category(v['type'], category)]
 
             # Sort by kid-friendly score and distance
             venues = sorted(venues, key=lambda x: (-x['kid_friendly_score'], x['distance_km']))
@@ -186,14 +202,25 @@ class LocationSearchService:
         }
         score = type_scores.get(venue_type, 30)
 
-        # Boost for kid-friendly keywords in name or description
+        # Boost for kid-friendly keywords in name or description (with negative context detection)
         name_lower = tags.get('name', '').lower()
         description_lower = tags.get('description', '').lower()
 
         kid_keywords = ['kid', 'child', 'baby', 'family', 'playground', 'play area']
         for keyword in kid_keywords:
-            if keyword in name_lower or keyword in description_lower:
-                score += 10
+            # Check in name
+            if keyword in name_lower:
+                if not self._has_negative_context(name_lower, keyword):
+                    score += 10
+                else:
+                    score -= 5  # Penalize explicit negative mentions
+
+            # Check in description
+            if keyword in description_lower:
+                if not self._has_negative_context(description_lower, keyword):
+                    score += 10
+                else:
+                    score -= 5
 
         # Check for family-friendly amenities
         if tags.get('changing_table') == 'yes':
@@ -203,7 +230,7 @@ class LocationSearchService:
         if tags.get('kids_area') == 'yes':
             score += 10
 
-        return min(score, 100)
+        return min(max(score, 0), 100)  # Clamp between 0-100
 
     def _extract_address(self, tags: dict) -> str:
         """Extract address from OSM tags."""
@@ -219,6 +246,52 @@ class LocationSearchService:
             address_parts.append(tags['addr:city'])
 
         return ', '.join(address_parts) if address_parts else 'Address not available'
+
+    def _has_negative_context(self, text: str, keyword: str, window: int = 30) -> bool:
+        """
+        Check if a keyword appears within negative context.
+
+        Args:
+            text: The full text to search
+            keyword: The keyword to check
+            window: Character window before keyword to check for negatives
+
+        Returns:
+            True if keyword is in negative context, False otherwise
+        """
+        # Find all positions where keyword appears
+        keyword_positions = [m.start() for m in re.finditer(re.escape(keyword), text)]
+
+        for pos in keyword_positions:
+            # Extract text window before the keyword
+            start = max(0, pos - window)
+            context_window = text[start:pos + len(keyword)]
+
+            # Check if any negative pattern appears in the window
+            for pattern in self.NEGATIVE_PATTERNS:
+                if re.search(pattern, context_window, re.IGNORECASE):
+                    return True
+
+        return False
+
+    def _matches_category(self, venue_type: str, category: str) -> bool:
+        """Check if venue type matches requested category."""
+        category_map = {
+            'cafes': ['Cafe', 'Restaurant', 'Fast Food'],
+            'parks': ['Park', 'Playground'],
+            'museums': ['Museum'],
+            'indoor': ['Zoo', 'Theme Park', 'Water Park'],
+            'all': None  # No filtering
+        }
+
+        if category == 'all' or category not in category_map:
+            return True
+
+        allowed_types = category_map.get(category)
+        if allowed_types is None:
+            return True
+
+        return venue_type in allowed_types
 
     @staticmethod
     def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
